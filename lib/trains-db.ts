@@ -102,15 +102,20 @@ export const TRAINS_DB: TrainEntry[] = [
   { number: '12959', name: 'Dadar Shatabdi Express', from: 'Dadar', fromCode: 'DR', to: 'Ahmedabad', toCode: 'ADI' },
   { number: '15005', name: 'Rapti Sagar Express', from: 'Guwahati', fromCode: 'GHY', to: 'Delhi Anand Vihar', toCode: 'ANVT' },
   { number: '12595', name: 'Gorakhpur Express', from: 'Anand Vihar Terminal', fromCode: 'ANVT', to: 'Gorakhpur', toCode: 'GKP' },
+  { number: '63557', name: 'Andal MEMU', from: 'Andal', fromCode: 'ADL', to: 'Asansol', toCode: 'ASN' },
+  { number: '63558', name: 'Asansol MEMU', from: 'Asansol', fromCode: 'ASN', to: 'Andal', toCode: 'ADL' },
+  { number: '63559', name: 'Andal Passenger', from: 'Andal', fromCode: 'ADL', to: 'Asansol', toCode: 'ASN' },
 ];
 
 /**
  * Search trains from the static database.
  * Matches against number, name, from/to station names and codes.
  */
+const MAX_SEARCH_RESULTS = 25;
+
 export function searchLocalTrains(query: string): TrainEntry[] {
   const q = query.trim().toLowerCase();
-  if (!q) return TRAINS_DB.slice(0, 12); // Return popular trains if no query
+  if (!q) return TRAINS_DB.slice(0, 20); // Return popular trains if no query
 
   return TRAINS_DB.filter(
     (t) =>
@@ -120,5 +125,85 @@ export function searchLocalTrains(query: string): TrainEntry[] {
       t.to.toLowerCase().includes(q) ||
       t.fromCode.toLowerCase().includes(q) ||
       t.toCode.toLowerCase().includes(q)
-  ).slice(0, 15);
+  ).slice(0, MAX_SEARCH_RESULTS);
+}
+
+const STATION_ALIASES: Record<string, string[]> = {
+  kolkata: ['howrah', 'sealdah', 'hwh', 'sdah'],
+  'kolkata station': ['howrah', 'sealdah', 'hwh', 'sdah'],
+  asansol: ['howrah', 'sealdah', 'hwh', 'sdah', 'asn'],
+  'asansol junction': ['howrah', 'sealdah', 'hwh', 'sdah', 'asn'],
+  andal: ['anand vihar terminal', 'delhi anand vihar', 'anvt'],
+  'anand vihar': ['anand vihar terminal', 'delhi anand vihar', 'anvt'],
+  'new delhi': ['ndls'],
+  ndls: ['new delhi'],
+  'hazrat nizamuddin': ['nzm'],
+  nzm: ['hazrat nizamuddin'],
+};
+
+function normalizeSearchTokens(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function expandRouteTokens(tokens: string[]) {
+  const expanded = new Set<string>(tokens);
+
+  for (const token of tokens) {
+    const aliases = STATION_ALIASES[token];
+    if (aliases) {
+      aliases.forEach((alias) => normalizeSearchTokens(alias).forEach((expandedToken) => expanded.add(expandedToken)));
+    }
+  }
+
+  return Array.from(expanded);
+}
+
+function matchesRouteToken(routeText: string, token: string) {
+  return routeText.includes(token);
+}
+
+function matchesRouteText(routeText: string, tokens: string[]) {
+  const expandedTokens = expandRouteTokens(tokens);
+  return expandedTokens.some((token) => matchesRouteToken(routeText, token));
+}
+
+function buildRouteSearchText(train: TrainEntry) {
+  return [train.from, train.to, train.fromCode, train.toCode, train.name].join(' ').toLowerCase();
+}
+
+export function findTrainsByRoute(origin: string, destination: string): TrainEntry[] {
+  const originTokens = normalizeSearchTokens(origin);
+  const destinationTokens = normalizeSearchTokens(destination);
+  if (!originTokens.length || !destinationTokens.length) return [];
+
+  const directMatches = TRAINS_DB.filter((train) => {
+    const routeText = buildRouteSearchText(train);
+    return matchesRouteText(routeText, originTokens) && matchesRouteText(routeText, destinationTokens);
+  });
+
+  if (directMatches.length > 0) {
+    return directMatches.slice(0, 40);
+  }
+
+  const originMatches = TRAINS_DB.filter((train) => {
+    const routeText = buildRouteSearchText(train);
+    return matchesRouteText(routeText, originTokens);
+  });
+
+  const destinationMatches = TRAINS_DB.filter((train) => {
+    const routeText = buildRouteSearchText(train);
+    return matchesRouteText(routeText, destinationTokens);
+  });
+
+  const approximateMatches = originMatches.filter((train) => destinationMatches.includes(train));
+  if (approximateMatches.length > 0) {
+    return approximateMatches.slice(0, 40);
+  }
+
+  return [...new Set([...originMatches, ...destinationMatches])].slice(0, 40);
 }

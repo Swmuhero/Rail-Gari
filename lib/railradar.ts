@@ -1,8 +1,33 @@
 import { SearchResult, LiveJourney, Station } from '@/types/train';
 import { env } from '@/config/env';
-import { searchLocalTrains, TRAINS_DB, TrainEntry } from '@/lib/trains-db';
+import { searchLocalTrains, TRAINS_DB } from '@/lib/trains-db';
 
-const RR_BASE = 'https://api.railradar.in/v1';
+const RR_BASE = env.RAILRADAR_BASE_URL || 'https://api.railradar.in/v1';
+const RR_TIMEOUT_MS = 10000;
+const SEARCH_RESULT_LIMIT = 25;
+
+const STATION_COORDS: Record<string, [number, number]> = {
+  NDLS: [28.643, 77.2194],
+  MMCT: [18.9696, 72.8193],
+  HWH: [22.5958, 88.2636],
+  NZM: [28.5562, 77.3168],
+  MAS: [13.0827, 80.2707],
+  CSMT: [18.9402, 72.8355],
+  BSB: [25.3217, 82.9873],
+  PNBE: [25.6084, 85.1440],
+  SDAH: [22.5908, 88.4028],
+  TVC: [8.5241, 76.9366],
+  LKO: [26.8467, 80.9462],
+  KSR: [12.9799, 77.5710],
+  SBC: [12.9784, 77.5712],
+  GKP: [26.7606, 83.3700],
+  ASR: [31.6216, 74.8749],
+  DBRG: [27.4839, 94.9115],
+  RNC: [23.3554, 85.3347],
+  CBE: [11.0168, 76.9558],
+  SAI: [19.6897, 74.4769],
+  OTH: [20.5937, 78.9629],
+};
 
 function rrHeaders() {
   return {
@@ -19,18 +44,23 @@ function extractErrorMessage(json: any): string {
   return 'Unknown API error';
 }
 
+type RrFetchOptions = RequestInit & {
+  timeoutMs?: number;
+};
+
 /**
- * Fetch wrapper with a 4-second timeout to prevent Node undici connect timeouts.
+ * Fetch wrapper with a bounded timeout so live pages fail honestly instead of hanging.
  */
-async function rrFetch(url: string, options?: RequestInit): Promise<Response> {
+async function rrFetch(url: string, options: RrFetchOptions = {}): Promise<Response> {
+  const { timeoutMs = RR_TIMEOUT_MS, headers, ...fetchOptions } = options;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(url, {
-      ...options,
+      ...fetchOptions,
       signal: controller.signal,
-      headers: { ...rrHeaders(), ...(options?.headers || {}) },
+      headers: { ...rrHeaders(), ...(headers || {}) },
     });
     return res;
   } finally {
@@ -77,6 +107,7 @@ interface RRRouteStop {
   delayDeparture?: number;
   distance: number;
   status?: string;
+  speedToNextStationKmph?: number;
 }
 
 interface RRLiveResponse {
@@ -96,6 +127,7 @@ interface RRLiveResponse {
     isActualPosition: boolean;
     lat?: number;
     lng?: number;
+    segmentProgress?: number;
   };
   nextHalt?: {
     stationCode: string;
@@ -111,8 +143,12 @@ function normaliseStatus(status: string): LiveJourney['status'] {
   switch (status) {
     case 'running': return 'running';
     case 'not-started': return 'not_started';
+    case 'not_started': return 'not_started';
     case 'completed': return 'completed';
     case 'cancelled': return 'cancelled';
+    case 'delayed': return 'delayed';
+    case 'on-time': return 'on_time';
+    case 'on_time': return 'on_time';
     default: return 'running';
   }
 }
@@ -186,6 +222,61 @@ function interpolatePolyline(coords: [number, number][], pct: number): [number, 
   return coords[coords.length - 1];
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function findRouteStopForLiveLocation(raw: RRLiveResponse): RRRouteStop | undefined {
+  const liveLocation = raw.currentLocation;
+  if (!liveLocation) return undefined;
+
+  return raw.route.find((stop) => stop.sequence === liveLocation.sequence)
+    || raw.route.find((stop) => stop.stationCode === liveLocation.stationCode);
+}
+
+function estimateCoveredDistance(raw: RRLiveResponse, fallbackKm: number, totalDistanceKm: number): number {
+  const liveLocation = raw.currentLocation;
+  const currentStop = findRouteStopForLiveLocation(raw);
+
+  if (!liveLocation || !currentStop || !isFiniteNumber(currentStop.distance)) {
+    return fallbackKm;
+  }
+
+  const baseDistance = currentStop.distance;
+  const nextStop = raw.route
+    .filter((stop) => stop.sequence > currentStop.sequence && isFiniteNumber(stop.distance))
+    .sort((a, b) => a.sequence - b.sequence)[0];
+
+  if (
+    liveLocation.status === 'departed'
+    && nextStop
+    && isFiniteNumber(liveLocation.segmentProgress)
+  ) {
+    const progress = clamp(liveLocation.segmentProgress, 0, 1);
+    return clamp(
+      baseDistance + (nextStop.distance - baseDistance) * progress,
+      0,
+      totalDistanceKm
+    );
+  }
+
+  return clamp(baseDistance, 0, totalDistanceKm);
+}
+
+function positionFromDistance(
+  routeGeo: [number, number][] | undefined,
+  distanceKm: number,
+  totalDistanceKm: number
+): [number, number] | undefined {
+  if (!routeGeo || routeGeo.length < 2 || totalDistanceKm <= 0) return undefined;
+  const pct = clamp((distanceKm / totalDistanceKm) * 100, 0, 100);
+  return interpolatePolyline(routeGeo, pct);
+}
+
 function normaliseLiveResponse(raw: RRLiveResponse, routeGeo?: [number, number][]): LiveJourney {
   const train = raw.train;
 
@@ -212,23 +303,26 @@ function normaliseLiveResponse(raw: RRLiveResponse, routeGeo?: [number, number][
   const previousStation = [...stations].reverse().find((s) => s.status === 'passed');
   const nextStation = stations.find((s) => s.status === 'upcoming');
 
-  const coveredKm = currentStation?.distanceKm || previousStation?.distanceKm || 0;
+  const stationCoveredKm = currentStation?.distanceKm || previousStation?.distanceKm || 0;
+  const coveredKm = estimateCoveredDistance(raw, stationCoveredKm, totalDistanceKm);
   const remainingKm = Math.max(0, totalDistanceKm - coveredKm);
   const completion = totalDistanceKm > 0 ? Math.min(100, (coveredKm / totalDistanceKm) * 100) : 0;
+  const liveRouteStop = findRouteStopForLiveLocation(raw);
 
   // Determine train position
   let trainLat = raw.currentLocation?.lat;
   let trainLng = raw.currentLocation?.lng;
 
-  if (!trainLat || !trainLng) {
+  if (!isFiniteNumber(trainLat) || !isFiniteNumber(trainLng)) {
+    const routePosition = positionFromDistance(routeGeo, coveredKm, totalDistanceKm);
     const posStation = currentStation || previousStation;
-    if (posStation && posStation.lat && posStation.lng) {
-      trainLat = posStation.lat;
-      trainLng = posStation.lng;
-    } else if (routeGeo && routeGeo.length >= 2) {
-      const [lng, lat] = interpolatePolyline(routeGeo, completion);
+    if (routePosition) {
+      const [lng, lat] = routePosition;
       trainLng = lng;
       trainLat = lat;
+    } else if (posStation && posStation.lat && posStation.lng) {
+      trainLat = posStation.lat;
+      trainLng = posStation.lng;
     } else {
       trainLat = train.source.lat;
       trainLng = train.source.lng;
@@ -239,11 +333,13 @@ function normaliseLiveResponse(raw: RRLiveResponse, routeGeo?: [number, number][
     lat: trainLat,
     lng: trainLng,
     heading: 45,
-    speedKmh: Math.round(train.avgSpeed || 80),
-    isMoving: raw.status === 'running',
+    speedKmh: Math.round(liveRouteStop?.speedToNextStationKmph || train.avgSpeed || 80),
+    isMoving: raw.status === 'running' && raw.currentLocation?.status !== 'at-station',
   };
 
-  const nextHaltStation = nextStation;
+  const nextHaltStation = raw.nextHalt?.stationCode
+    ? stations.find((s) => s.code === raw.nextHalt?.stationCode) || nextStation
+    : nextStation;
   const etaStr = nextHaltStation?.scheduledArrival
     ? `${nextHaltStation.name} at ${nextHaltStation.scheduledArrival}`
     : 'Calculating...';
@@ -276,6 +372,7 @@ async function fetchRouteGeometry(trainNumber: string): Promise<[number, number]
   try {
     const res = await rrFetch(`${RR_BASE}/trains/${trainNumber}/route`, {
       next: { revalidate: 86400 },
+      timeoutMs: 8000,
     } as any);
     if (!res.ok) return undefined;
     const json = await res.json();
@@ -293,105 +390,137 @@ async function fetchRouteGeometry(trainNumber: string): Promise<[number, number]
 
 // ─── Fallback Journey Generator ──────────────────────────────────────────
 
+function getStationCoordinates(code: string): [number, number] {
+  return STATION_COORDS[code] ?? [20.5937, 78.9629];
+}
+
+function haversineDistance([lat1, lon1]: [number, number], [lat2, lon2]: [number, number]): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Kolkata',
+  });
+}
+
+function createFallbackStation(code: string, name: string, lat: number, lng: number, scheduledDeparture: string, scheduledArrival: string, distanceKm: number, status: Station['status']) {
+  return {
+    code,
+    name,
+    lat,
+    lng,
+    scheduledArrival,
+    scheduledDeparture,
+    delayMinutes: 0,
+    distanceKm,
+    status,
+  } as Station;
+}
+
 function generateFallbackJourney(trainNumber: string): LiveJourney | null {
-  const train = TRAINS_DB.find((t) => t.number === trainNumber) || {
-    number: trainNumber,
-    name: `Express Train #${trainNumber}`,
-    from: 'Mumbai Central',
-    fromCode: 'MMCT',
-    to: 'New Delhi',
-    toCode: 'NDLS',
+  const train = TRAINS_DB.find((t) => t.number === trainNumber);
+
+  const originStation = {
+    code: train?.fromCode ?? 'SRC',
+    name: train?.from ?? 'Source Station',
+  };
+  const destinationStation = {
+    code: train?.toCode ?? 'DST',
+    name: train?.to ?? 'Destination Station',
   };
 
+  const originCoords = getStationCoordinates(originStation.code);
+  const destinationCoords = getStationCoordinates(destinationStation.code);
+  const totalDistanceKm = Math.max(200, Math.round(haversineDistance(originCoords, destinationCoords)));
+  const coveredDistanceKm = Math.round(Math.max(50, Math.min(totalDistanceKm - 50, totalDistanceKm * 0.55)));
+  const remainingDistanceKm = Math.max(0, totalDistanceKm - coveredDistanceKm);
+  const completionPercentage = Math.round((coveredDistanceKm / totalDistanceKm) * 1000) / 10;
+
+  const now = new Date();
+  const departureTime = new Date(now);
+  departureTime.setHours(now.getHours() - 3);
+  const arrivalTime = new Date(now);
+  arrivalTime.setHours(now.getHours() + 4);
+
+  const routeGeometry: [number, number][] = [
+    [originCoords[1], originCoords[0]],
+    [(originCoords[1] + destinationCoords[1]) / 2, (originCoords[0] + destinationCoords[0]) / 2],
+    [destinationCoords[1], destinationCoords[0]],
+  ];
+
+  const midpoint = routeGeometry[1];
   const stations: Station[] = [
-    {
-      code: train.fromCode,
-      name: train.from,
-      lat: 18.9696,
-      lng: 72.8193,
-      scheduledArrival: '17:00',
-      scheduledDeparture: '17:00',
-      actualArrival: '17:00',
-      actualDeparture: '17:00',
-      delayMinutes: 0,
-      distanceKm: 0,
-      status: 'passed',
-      platform: '1',
-    },
-    {
-      code: 'ST',
-      name: 'Surat',
-      lat: 21.2049,
-      lng: 72.8406,
-      scheduledArrival: '20:10',
-      scheduledDeparture: '20:15',
-      actualArrival: '20:14',
-      actualDeparture: '20:19',
-      delayMinutes: 4,
-      distanceKm: 263,
-      status: 'passed',
-      platform: '1',
-    },
-    {
-      code: 'KOTA',
-      name: 'Kota Junction',
-      lat: 25.2138,
-      lng: 75.8648,
-      scheduledArrival: '03:15',
-      scheduledDeparture: '03:25',
-      actualArrival: '03:23',
-      actualDeparture: '03:33',
-      delayMinutes: 8,
-      distanceKm: 920,
-      status: 'current',
-      platform: '1',
-    },
-    {
-      code: train.toCode,
-      name: train.to,
-      lat: 28.643,
-      lng: 77.2194,
-      scheduledArrival: '08:32',
-      scheduledDeparture: '08:32',
-      delayMinutes: 8,
-      distanceKm: 1384,
-      status: 'upcoming',
-      platform: '1',
-    },
+    createFallbackStation(
+      originStation.code,
+      originStation.name,
+      originCoords[0],
+      originCoords[1],
+      formatTime(departureTime),
+      formatTime(departureTime),
+      0,
+      'passed'
+    ),
+    createFallbackStation(
+      `${originStation.code}-MID`,
+      'En route',
+      midpoint[1],
+      midpoint[0],
+      formatTime(now),
+      formatTime(now),
+      coveredDistanceKm,
+      'current'
+    ),
+    createFallbackStation(
+      destinationStation.code,
+      destinationStation.name,
+      destinationCoords[0],
+      destinationCoords[1],
+      formatTime(arrivalTime),
+      formatTime(arrivalTime),
+      totalDistanceKm,
+      'upcoming'
+    ),
   ];
 
   return {
-    trainId: train.number,
-    number: train.number,
-    name: train.name,
-    origin: { code: train.fromCode, name: train.from },
-    destination: { code: train.toCode, name: train.to },
+    trainId: trainNumber,
+    number: trainNumber,
+    name: train?.name ?? `Express Train #${trainNumber}`,
+    origin: originStation,
+    destination: destinationStation,
     currentLocation: {
-      lat: 25.2138,
-      lng: 75.8648,
+      lat: midpoint[1],
+      lng: midpoint[0],
       heading: 45,
-      speedKmh: 110,
+      speedKmh: 85,
       isMoving: true,
     },
     status: 'running',
-    delayMinutes: 8,
-    speedKmh: 110,
-    distanceCoveredKm: 920,
-    remainingDistanceKm: 464,
-    totalDistanceKm: 1384,
-    completionPercentage: 66.5,
+    delayMinutes: 0,
+    speedKmh: 85,
+    distanceCoveredKm: coveredDistanceKm,
+    remainingDistanceKm,
+    totalDistanceKm,
+    completionPercentage,
     lastUpdated: new Date().toISOString(),
-    ETA: 'Kota Junction at 03:15',
-    previousStation: stations[1],
-    currentStation: stations[2],
-    nextStation: stations[3],
+    ETA: `${destinationStation.name} at ${formatTime(arrivalTime)}`,
+    previousStation: stations[0],
+    currentStation: stations[1],
+    nextStation: stations[2],
     stations,
-    routeGeometry: [
-      [72.8193, 18.9696],
-      [72.8406, 21.2049],
-      [75.8648, 25.2138],
-      [77.2194, 28.643],
-    ],
+    routeGeometry,
   };
 }
 
@@ -422,13 +551,22 @@ export async function searchTrains(query: string): Promise<SearchResult[]> {
     const data: Record<string, string> = json?.data || {};
     return Object.entries(data)
       .slice(0, 15)
-      .map(([number, name]) => ({
-        id: number,
-        number,
-        name,
-        origin: { code: '', name: '' },
-        destination: { code: '', name: '' },
-      }));
+      .map(([number, name]) => {
+        const localTrain = TRAINS_DB.find((t) => t.number === number);
+        return {
+          id: number,
+          number,
+          name,
+          origin: {
+            code: localTrain?.fromCode || '',
+            name: localTrain?.from || '',
+          },
+          destination: {
+            code: localTrain?.toCode || '',
+            name: localTrain?.to || '',
+          },
+        };
+      });
   } catch (err) {
     console.warn('RailRadar lookup API fetch failed, using local DB fallback');
     return searchLocalTrains(q).map((t) => ({

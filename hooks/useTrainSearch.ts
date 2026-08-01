@@ -1,29 +1,33 @@
 'use client';
 
-import { useMemo } from 'react';
-import { searchLocalTrains } from '@/lib/trains-db';
+import { useQuery } from '@tanstack/react-query';
 import { SearchResult } from '@/types/train';
 
-/**
- * Client-side only search hook using the bundled static trains database.
- * No network call — instant results, no quota consumption, no timeouts.
- */
+async function fetchSearchResults(query: string): Promise<SearchResult[]> {
+  const url = `/api/search?query=${encodeURIComponent(query)}`;
+  const res = await fetch(url);
+  const json = await res.json();
+
+  if (!res.ok || !json?.success || !Array.isArray(json?.data)) {
+    throw new Error('Failed to load train search results');
+  }
+
+  return json.data as SearchResult[];
+}
+
 export function useTrainSearch(query: string) {
-  const data = useMemo<SearchResult[]>(() => {
-    const results = searchLocalTrains(query);
-    return results.map((t) => ({
-      id: t.number,
-      number: t.number,
-      name: t.name,
-      origin: { code: t.fromCode, name: t.from },
-      destination: { code: t.toCode, name: t.to },
-    }));
-  }, [query]);
+  const trimmedQuery = query.trim();
+  const { data = [], error, isError, isLoading } = useQuery({
+    queryKey: ['trainSearch', trimmedQuery],
+    queryFn: () => fetchSearchResults(trimmedQuery),
+    staleTime: 5000,
+    keepPreviousData: true,
+  });
 
   return {
     data,
-    isLoading: false,
-    isError: false,
-    error: null,
+    isLoading,
+    isError,
+    error,
   };
 }

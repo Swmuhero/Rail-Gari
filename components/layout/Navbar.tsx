@@ -1,18 +1,38 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Train, Search, Heart, Map } from 'lucide-react';
+import { Train, Search, Heart, Map, Moon, Sun } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/utils/cn';
 import { useFavoritesStore } from '@/store/favorites';
 
+const THEME_STORAGE_KEY = 'railgaadi-theme';
+
 export function Navbar() {
   const pathname = usePathname();
   const { favorites } = useFavoritesStore();
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    const stored = typeof window !== 'undefined' ? window.localStorage.getItem(THEME_STORAGE_KEY) : null;
+    const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialTheme = stored === 'dark' || (!stored && prefersDark) ? 'dark' : 'light';
+
+    setTheme(initialTheme);
+    document.documentElement.classList.toggle('dark', initialTheme === 'dark');
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
+    window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+  };
 
   const links = [
     { href: '/', label: 'Search', icon: Search, exact: true },
+    { href: '/route-finder', label: 'Routes', icon: Map, exact: false },
     { href: '/favorites', label: 'Favorites', icon: Heart, exact: false },
   ];
 
@@ -61,6 +81,15 @@ export function Navbar() {
               </Link>
             );
           })}
+
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label="Toggle color mode"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
         </nav>
       </div>
     </header>
