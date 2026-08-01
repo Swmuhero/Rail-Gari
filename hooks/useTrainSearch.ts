@@ -17,7 +17,7 @@ async function fetchSearchResults(query: string): Promise<SearchResult[]> {
 
 export function useTrainSearch(query: string) {
   const trimmedQuery = query.trim();
-  const { data = [], error, isError, isLoading } = useQuery({
+  const { data = [], error, isError, isLoading } = useQuery<SearchResult[]>({
     queryKey: ['trainSearch', trimmedQuery],
     queryFn: () => fetchSearchResults(trimmedQuery),
     staleTime: 5000,
