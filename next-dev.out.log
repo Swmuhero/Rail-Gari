@@ -1,0 +1,45 @@
+
+> railgaadi@0.1.0 dev
+> next dev -p 3000
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 9.6s
+ ○ Compiling / ...
+ ✓ Compiled / in 12.8s (1426 modules)
+ GET / 200 in 15083ms
+ ✓ Compiled in 2.1s (712 modules)
+ ✓ Compiled in 388ms (697 modules)
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 3.2s (1414 modules)
+ GET /icons/icon-192.png 404 in 4144ms
+ GET / 200 in 154ms
+ GET /icons/icon-192.png 404 in 170ms
+ ○ Compiling /api/search ...
+ ✓ Compiled /api/search in 829ms (749 modules)
+ GET /api/search?query= 200 in 1134ms
+ ○ Compiling /route-finder ...
+ ✓ Compiled /route-finder in 6.2s (1421 modules)
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 927ms (1424 modules)
+ GET /icons/icon-192.png 404 in 1698ms
+ GET /icons/icon-192.png 404 in 240ms
+ ○ Compiling /api/search ...
+ ✓ Compiled /api/search in 735ms (755 modules)
+ GET /api/search?query= 200 in 998ms
+ GET /icons/icon-192.png 404 in 720ms
+ GET /api/search?query= 200 in 716ms
+ GET /icons/icon-192.png 404 in 122ms
+ ✓ Compiled in 4.7s (1475 modules)
+ ✓ Compiled in 1678ms (1438 modules)
+ ○ Compiling /api/search ...
+ ✓ Compiled /api/search in 1268ms (755 modules)
+ GET /api/search?query= 200 in 1677ms
+ GET / 200 in 480ms
+ ○ Compiling /_not-found ...
+ GET /api/search?query= 200 in 467ms
+ ✓ Compiled /_not-found in 1779ms (1460 modules)
+ GET /icons/icon-192.png 404 in 2289ms

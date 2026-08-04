@@ -1,47 +1,116 @@
 'use client';
 
-import Link from 'next/link';
-import { ArrowRight, Heart, Radar, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ArrowRight, Mail, MessageCircle, X } from 'lucide-react';
+
+const EMAIL_ADDRESS = 'swapneel793@gmail.com';
+const EMAIL_LINK = `mailto:${EMAIL_ADDRESS}`;
 
 export function CTASection() {
-  return (
-    <section className="px-4 pb-8">
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-3xl border border-slate-200 bg-slate-900 shadow-glass dark:border-slate-800 dark:bg-slate-900">
-        <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.3fr_0.7fr] lg:items-center lg:p-10">
-          <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-sky-200">
-              <Radar className="h-3.5 w-3.5" />
-              Live railway intelligence
-            </div>
-            <div className="space-y-3">
-              <h2 className="max-w-2xl text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-                Track your next train with live status, weather, and route insights.
-              </h2>
-              <p className="max-w-2xl text-sm leading-6 text-slate-300">
-                Search by train number or name, save important trains, and jump back into live journey details whenever you need them.
-              </p>
-            </div>
-          </div>
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-          <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-sky-100"
-            >
-              <Search className="h-4 w-4" />
-              Search trains
-            </Link>
-            <Link
-              href="/favorites"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-white/10"
-            >
-              <Heart className="h-4 w-4" />
-              Favorites
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
+  useEffect(() => {
+    if (!isDialogOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsDialogOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDialogOpen]);
+
+  return (
+    <section className="relative isolate overflow-hidden border-y border-sky-500/15 bg-slate-950 px-4 py-24 text-center shadow-glass dark:border-sky-400/15 sm:py-32">
+      <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,rgba(148,163,184,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.06)_1px,transparent_1px)] bg-[size:64px_64px]" />
+      <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-rail-blue/60 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 -z-10 h-px bg-gradient-to-r from-transparent via-rail-cyan/50 to-transparent" />
+
+      <div className="mx-auto flex min-h-[360px] max-w-7xl flex-col items-center justify-center">
+        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-xs font-semibold text-sky-200 shadow-glass">
+          <MessageCircle className="h-3.5 w-3.5" />
+          Let&apos;s connect
         </div>
+
+        <h2 className="mt-8 max-w-5xl text-balance text-4xl font-extrabold leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
+          Let&apos;s connect{' '}
+          <span className="text-rail-blue">together.</span>
+        </h2>
+
+        <p className="mt-6 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
+          Available anytime to catch up with you. I&apos;m just one click away.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => setIsDialogOpen(true)}
+          className="mt-10 inline-flex items-center justify-center gap-3 rounded-full border border-white/15 bg-white/[0.04] px-8 py-4 text-xs font-extrabold uppercase tracking-[0.32em] text-white transition-all hover:border-rail-blue/60 hover:bg-rail-blue/15 hover:text-sky-100 focus:outline-none focus:ring-2 focus:ring-rail-blue focus:ring-offset-2 focus:ring-offset-slate-950"
+        >
+          Start a conversation
+          <ArrowRight className="h-4 w-4" />
+        </button>
       </div>
+
+      <AnimatePresence>
+        {isDialogOpen && (
+          <motion.div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/75 px-4 py-6 backdrop-blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onMouseDown={() => setIsDialogOpen(false)}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cta-dialog-title"
+              className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-white/10 bg-slate-950 p-6 text-left shadow-glass-hover sm:p-8"
+              initial={{ opacity: 0, y: 18, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 18, scale: 0.98 }}
+              transition={{ duration: 0.18 }}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setIsDialogOpen(false)}
+                aria-label="Close dialog"
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-rail-blue/15 text-sky-300">
+                <Mail className="h-5 w-5" />
+              </div>
+
+              <h3 id="cta-dialog-title" className="mt-5 text-2xl font-extrabold tracking-tight text-white">
+                Let&apos;s connect together
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-slate-400">
+                Send a message directly to my inbox and I&apos;ll get back to you.
+              </p>
+
+              <div className="mt-7">
+                <a
+                  href={EMAIL_LINK}
+                  onClick={() => setIsDialogOpen(false)}
+                  className="group flex items-center justify-between rounded-2xl border border-rail-blue/40 bg-rail-blue px-5 py-4 text-sm font-extrabold text-white shadow-glow transition-colors hover:bg-sky-600"
+                >
+                  <span className="inline-flex min-w-0 items-center gap-3">
+                    <Mail className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate">{EMAIL_ADDRESS}</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 flex-shrink-0 transition-transform group-hover:translate-x-0.5" />
+                </a>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
