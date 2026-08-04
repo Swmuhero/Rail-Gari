@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Train, Search, Heart, Map, Moon, Sun } from 'lucide-react';
+import { Train, Search, Heart, Map, Moon, Sun, Sparkles } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/utils/cn';
 import { useFavoritesStore } from '@/store/favorites';
@@ -32,6 +32,7 @@ export function Navbar() {
 
   const links = [
     { href: '/', label: 'Search', icon: Search, exact: true },
+    { href: '/#features', label: 'Features', icon: Sparkles, exact: false },
     { href: '/route-finder', label: 'Routes', icon: Map, exact: false },
     { href: '/favorites', label: 'Favorites', icon: Heart, exact: false },
   ];

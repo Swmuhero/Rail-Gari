@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Train, ArrowRight, Sparkles, Clock, History, MapPin, Zap,
-  Search, Loader2, AlertCircle, X, TrendingUp
+  Train, ArrowRight, Sparkles, History, MapPin, Zap,
+  Search, Loader2, AlertCircle, X, TrendingUp, Heart, CloudSun, Mountain
 } from 'lucide-react';
 import { useTrainSearch } from '@/hooks/useTrainSearch';
 import { useSearchStore } from '@/store/search';
@@ -298,25 +298,68 @@ export default function HomePage() {
       )}
 
       {/* ─── Feature Grid ──────────────────────────────────────────────────── */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <section id="features" className="scroll-mt-28 space-y-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full bg-rail-blue/10 px-3 py-1 text-xs font-semibold text-rail-blue">
+              <Sparkles className="h-3.5 w-3.5" />
+              Features
+            </div>
+            <div>
+              <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+                Everything needed for a live train check.
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+                RailGaadi brings tracking, route context, saved trains, weather, and terrain into a clean workflow for repeat travel checks.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/favorites"
+            className="inline-flex w-fit items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-600 transition-colors hover:bg-rose-100 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/20"
+          >
+            <Heart className="h-4 w-4 fill-current" />
+            Open Favorites
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {[
           {
             icon: <MapPin className="h-6 w-6" />,
             color: 'bg-sky-500/10 text-rail-blue',
-            title: 'Vector Map Tracking',
-            desc: 'MapTiler dark vector tiles with animated live train marker, route glow, and follow camera.',
+            title: 'Vector map tracking',
+            desc: 'Follow live train movement on an interactive route map with station context and position updates.',
           },
           {
             icon: <Zap className="h-6 w-6" />,
             color: 'bg-emerald-500/10 text-emerald-600',
-            title: 'Live 30s Auto-Refresh',
-            desc: 'TanStack Query polls RailRadar every 30 seconds for position, delay, and ETA updates.',
+            title: 'Auto-refresh status',
+            desc: 'Keep delay, ETA, and journey progress fresh while you monitor an active train.',
           },
           {
-            icon: <Clock className="h-6 w-6" />,
+            icon: <Heart className="h-6 w-6" />,
+            color: 'bg-rose-500/10 text-rose-500',
+            title: 'Favorite trains',
+            desc: 'Save important trains and access them from the navbar or the dedicated Favorites page.',
+          },
+          {
+            icon: <CloudSun className="h-6 w-6" />,
             color: 'bg-amber-500/10 text-amber-600',
-            title: 'OpenWeather & Terrain',
-            desc: 'Per-station live weather and OpenTopography SRTM elevation profiles along the route.',
+            title: 'Weather intelligence',
+            desc: 'Check weather around important route stops before you plan a pickup, commute, or connection.',
+          },
+          {
+            icon: <Mountain className="h-6 w-6" />,
+            color: 'bg-violet-500/10 text-violet-600',
+            title: 'Terrain profile',
+            desc: 'View elevation changes along the journey for better route context beyond the timetable.',
+          },
+          {
+            icon: <TrendingUp className="h-6 w-6" />,
+            color: 'bg-cyan-500/10 text-cyan-600',
+            title: 'Delay analytics',
+            desc: 'Scan journey performance, current delay, progress, and ETA signals in one dashboard.',
           },
         ].map((f, i) => (
           <motion.div
@@ -324,15 +367,16 @@ export default function HomePage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 * i }}
-            className="glass-panel rounded-3xl p-6 space-y-3"
+            className="glass-panel rounded-3xl p-6 space-y-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-glass-hover"
           >
             <div className={cn('h-12 w-12 rounded-2xl flex items-center justify-center', f.color)}>
               {f.icon}
             </div>
-            <h3 className="font-bold text-lg text-slate-900 dark:text-white">{f.title}</h3>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">{f.title}</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{f.desc}</p>
           </motion.div>
         ))}
+        </div>
       </section>
     </div>
   );

@@ -3,12 +3,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, Heart, Map } from 'lucide-react';
+import { Home, Search, Heart, Map, Sparkles } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useFavoritesStore } from '@/store/favorites';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', icon: Home },
+  { href: '/#features', label: 'Features', icon: Sparkles },
   { href: '/route-finder', label: 'Routes', icon: Map },
   { href: '/?search=1', label: 'Search', icon: Search },
   { href: '/favorites', label: 'Favorites', icon: Heart },
@@ -32,7 +33,7 @@ export function BottomNav() {
                 key={href}
                 href={href.split('?')[0]}
                 className={cn(
-                  'relative flex flex-col items-center gap-0.5 rounded-xl px-4 py-2 transition-all duration-200',
+                  'relative flex flex-col items-center gap-0.5 rounded-xl px-2.5 py-2 transition-all duration-200',
                   isActive
                     ? 'text-rail-blue'
                     : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
