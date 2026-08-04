@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { SearchResult } from '@/types/train';
 
 async function fetchSearchResults(query: string): Promise<SearchResult[]> {
@@ -17,17 +17,17 @@ async function fetchSearchResults(query: string): Promise<SearchResult[]> {
 
 export function useTrainSearch(query: string) {
   const trimmedQuery = query.trim();
-  const { data = [], error, isError, isLoading } = useQuery<SearchResult[]>({
+  const queryResult = useQuery<SearchResult[], Error>({
     queryKey: ['trainSearch', trimmedQuery],
     queryFn: () => fetchSearchResults(trimmedQuery),
     staleTime: 5000,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 
   return {
-    data,
-    isLoading,
-    isError,
-    error,
+    data: queryResult.data ?? [],
+    isLoading: queryResult.isLoading,
+    isError: queryResult.isError,
+    error: queryResult.error,
   };
 }

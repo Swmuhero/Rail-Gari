@@ -70,7 +70,7 @@ export default function HomePage() {
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && inputValue.trim()) {
-      const first = searchResults?.[0];
+      const first = (searchResults ?? [])[0];
       if (first) handleSelect(first);
       else router.push(`/train/${inputValue.trim()}`);
     }
